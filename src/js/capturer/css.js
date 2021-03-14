@@ -1,301 +1,445 @@
-;(function (root, factory) {
-  if (typeof module === 'object' && module.exports) {
-    // CJS
-    const process = require('process');
-    if (process.env.MX_WC_TESTING) {
-      module.exports = factory;
-    } else {
-      module.exports = factory(
-        require('strip-css-comments'),
-        require('../lib/log.js'),
-        require('../lib/tool.js'),
-        require('../lib/asset.js'),
-        require('../lib/task.js'),
-        require('../lib/ext-msg.js'),
-        require('./tool.js'),
-      );
-    }
-  } else {
-    // browser or other
-    root.MxWcCapturerCss = factory(
-      root.stripCssComments,
-      root.MxWcLog,
-      root.MxWcTool,
-      root.MxWcAsset,
-      root.MxWcTask,
-      root.MxWcExtMsg,
-      root.MxWcCaptureTool
-    );
-  }
-})(this, function(stripCssComments, Log,  T, Asset, Task, ExtMsg, CaptureTool, undefined) {
-  "use strict";
+"use strict";
 
-  /**
-   * Capture CSS link
-   *
-   * @param {Object} opts
-   *   - {String} link
-   *   - {String} baseUrl
-   *   - {String} docUrl
-   *   - {Object} storageInfo
-   *   - {String} clipId
-   *   - {Object} mimeTypeDict
-   *   - {Object} config
-   *   - {Object} headerParams
-   *   - {Boolean} needFixStyle
-   *
-   * @return {Array} tasks
-   *
-   */
-  async function captureLink(params) {
-    const {baseUrl, docUrl, storageInfo, clipId, mimeTypeDict={}, config, headerParams, needFixStyle} = params;
+import stripCssComments from 'strip-css-comments';
+import Log              from '../lib/log.js';
+import T                from '../lib/tool.js';
+import Asset            from '../lib/asset.js';
+import Task             from '../lib/task.js';
+import ExtMsg           from '../lib/ext-msg.js';
+import CaptureTool      from './tool.js';
 
-    const {isValid, url, message} = T.completeUrl(params.link, baseUrl);
-    if (!isValid) {
-      console.warn("<mx-wc>", message);
-      return [];
-    }
+/**
+ * Capture CSS link
+ *
+ * @param {Object} opts
+ *   - {String} link
+ *   - {String} baseUrl
+ *   - {String} docUrl
+ *   - {Object} storageInfo
+ *   - {String} clipId
+ *   - {Object} config
+ *   - {Object} requestParams
+ *   - {Boolean} needFixStyle
+ *
+ * @return {Array} tasks
+ *
+ */
+async function captureLink(params) {
+  const {baseUrl, docUrl, storageInfo, clipId, config, requestParams, needFixStyle} = params;
 
-    try {
-      const {fromCache, result: text} = await ExtMsg.sendToBackground({
-        type: 'fetch.text',
-        body: {
-          clipId: clipId,
-          url: url,
-          headers: CaptureTool.getRequestHeaders(url, headerParams),
-          timeout: config.requestTimeout,
-        }
-      });
-
-      if (fromCache) {
-        // processed.
-        return [];
-      } else {
-        // Use url as baseUrl
-        const {cssText, tasks} = await captureText(Object.assign({baseUrl: url, docUrl: docUrl}, {
-          text, storageInfo, clipId, mimeTypeDict, config, headerParams, needFixStyle
-        }));
-
-        const assetName = Asset.getNameByLink({
-          link: url,
-          extension: 'css',
-          prefix: clipId
-        });
-        const filename = Asset.getFilename({storageInfo, assetName});
-
-        tasks.push(Task.createStyleTask(filename, cssText, clipId));
-        return tasks;
-      }
-    } catch(err) {
-      // Fetching text is rejected
-      Log.error(`fetch.text request css (url:${url}) failed`, err.message);
-      // it's fine.
-      return [];
-    }
+  const {isValid, url, message} = T.completeUrl(params.link, baseUrl);
+  if (!isValid) {
+    console.warn("<mx-wc>", message);
+    return [];
   }
 
-  /**
-   * Capture CSS text
-   *
-   * @param {Object} opts
-   *   - {String} text
-   *   - {String} baseUrl - url of css text
-   *   - {String} docUrl  - url of document
-   *   - {Object} storageInfo
-   *   - {String} clipId
-   *   - {Object} mimeTypeDict
-   *   - {Object} config
-   *   - {Object} headerParams
-   *   - {Boolean} needFixStyle
-   *
-   * @return {Array}
-   *   - {String} cssText
-   *   - {Array}  tasks
-   */
-  async function captureText(params) {
-    const {baseUrl, docUrl, storageInfo, clipId, mimeTypeDict={}, config, headerParams, needFixStyle} = params;
-    let {text: styleText} = params;
-    const taskCollection = [];
-    // FIXME danger here (order matter)
-    const rule1 = {regExp: /url\("[^\)]+"\)/gm, template: 'url("$PATH")', separator: '"'};
-    const rule2 = {regExp: /url\('[^\)]+'\)/gm, template: 'url("$PATH")', separator: "'"};
-    const rule3 = {regExp: /url\([^\)'"]+\)/gm, template: 'url("$PATH")', separator: /\(|\)/ };
-
-    const rule11 = {regExp: /@import\s+url\("[^\)]+"\)/igm, template: '@import url("$PATH")', separator: '"'};
-    const rule12 = {regExp: /@import\s+url\('[^\)]+'\)/igm, template: '@import url("$PATH")', separator: "'"};
-    const rule13 = {regExp: /@import\s+url\([^\)'"]+\)/igm, template: '@import url("$PATH")', separator: /\(|\)/ };
-
-    const rule14 = {regExp: /@import\s*'[^;']+'/igm, template: '@import url("$PATH")', separator: "'"};
-    const rule15 = {regExp: /@import\s*"[^;"]+"/igm, template: '@import url("$PATH")', separator: '"'};
-
-    styleText = stripCssComments(styleText);
-
-    const commonParams = { baseUrl, docUrl, clipId, storageInfo, mimeTypeDict };
-
-    // fonts
-    const fontRegExp = /@font-face\s?\{[^\}]+\}/gm;
-    let result = parseAsset(Object.assign({
-      styleText: styleText,
-      regExp: fontRegExp,
-      rules: [rule1, rule2, rule3],
-      taskType: 'fontFileTask',
-      saveAsset: config.saveWebFont,
-    }, commonParams));
-    styleText = result.styleText;
-    taskCollection.push(...result.tasks);
-
-    // background
-    const bgRegExp = /background:([^:;]*url\([^\)]+\)[^:;]*)+;/img;
-    result = parseAsset(Object.assign({
-      styleText: styleText,
-      regExp: bgRegExp,
-      rules: [rule1, rule2, rule3],
-      taskType: 'imageFileTask',
-      saveAsset: config.saveCssImage,
-    }, commonParams));
-    styleText = result.styleText;
-    taskCollection.push(...result.tasks);
-
-
-    // background-image
-    const bgImgRegExp = /background-image:([^:;]*url\([^\)]+\)[^:;]*)+;/img;
-    result = parseAsset(Object.assign({
-      styleText: styleText,
-      regExp: bgImgRegExp,
-      rules: [rule1, rule2, rule3],
-      taskType: 'imageFileTask',
-      saveAsset: config.saveCssImage,
-    }, commonParams));
-    styleText = result.styleText;
-    taskCollection.push(...result.tasks);
-
-    // border-image
-    const borderImgExp = /border-image:([^:;]*url\([^\)]+\)[^:;]*)+;/img;
-    result = parseAsset(Object.assign({
-      styleText: styleText,
-      regExp: borderImgExp,
-      rules: [rule1, rule2, rule3],
-      taskType: 'imageFileTask',
-      saveAsset: config.saveCssImage,
-    }, commonParams));
-    styleText = result.styleText;
-    taskCollection.push(...result.tasks);
-
-
-
-    // @import css
-    const cssRegExp = /@import[^;]+;/igm;
-    result = parseAsset(Object.assign({
-      styleText: styleText,
-      regExp: cssRegExp,
-      rules: [rule11, rule12, rule13, rule14, rule15],
-      extension: 'css',
-      saveAsset: true
-    }, commonParams));
-    styleText = result.styleText;
-
-    // convert css url task to text task.
-
-    for(let i = 0; i < result.tasks.length; i++) {
-      const tasks = await captureLink(Object.assign({
-        link: result.tasks[i].url,
-        config: config,
-        headerParams: headerParams,
-        needFixStyle: needFixStyle,
-      }, commonParams));
-      taskCollection.push(...tasks);
-    }
-
-    if (needFixStyle) {
-      styleText = fixBodyChildrenStyle(styleText);
-    }
-
-    return {cssText: styleText, tasks: taskCollection};
-  }
-
-
-  function parseAsset(params) {
-    const  {regExp, clipId, baseUrl, docUrl, rules, storageInfo,
-      taskType, extension, mimeTypeDict, saveAsset} = params;
-
-    let {styleText} = params;
-    const taskCollection = [];
-    styleText = styleText.replace(regExp, (match) => {
-      const r = parseTextUrl({
+  try {
+    const {fromCache, result: text} = await ExtMsg.sendToBackend( 'clipping', {
+      type: 'fetch.text',
+      body: {
         clipId: clipId,
-        cssText: match,
-        baseUrl: baseUrl,
-        docUrl: docUrl,
-        rules: rules,
-        storageInfo: storageInfo,
-        extension: extension,
-        mimeTypeDict: mimeTypeDict,
-        taskType: taskType,
-        saveAsset: saveAsset,
-      });
-      taskCollection.push(...r.tasks);
-      return r.cssText;
-    });
-    return {styleText: styleText, tasks: taskCollection};
-  }
-
-  function parseTextUrl(params) {
-    const {clipId, baseUrl, docUrl, rules, storageInfo, taskType,
-      extension, mimeTypeDict, saveAsset} = params;
-
-    let cssText = params.cssText;
-    const tasks = [];
-    const getReplace = function(rule){
-      return function(match){
-        const part = match.split(rule.separator)[1].trim();
-        const {isValid, url, message} = T.completeUrl(part, baseUrl);
-        if (!isValid) {
-          //FIXME
-          return rule.template.replace('$PATH', '');
-        }
-        if(T.isDataUrl(url) || T.isHttpUrl(url)) {
-
-          if(saveAsset){
-            const assetName = Asset.getNameByLink({
-              link: url,
-              extension: extension,
-              prefix: clipId,
-              mimeTypeData: {httpMimeType: mimeTypeDict[url]}
-            });
-            const filename = Asset.getFilename({storageInfo, assetName});
-            tasks.push(Task.createUrlTask(filename, url, clipId, taskType));
-            if(baseUrl === docUrl){
-              return rule.template.replace('$PATH', Asset.getPath({storageInfo, assetName}));
-            }else{
-              return rule.template.replace('$PATH', assetName);
-            }
-          } else {
-            // set path to blank
-            return rule.template.replace('$PATH', '');
-          }
-        } else {
-          return match;
-        }
+        url: url,
+        headers: requestParams.getHeaders(url),
+        timeout: requestParams.timeout,
+        tries: requestParams.tries,
       }
+    });
+
+    if (fromCache) {
+      // processed.
+      return [];
+    } else {
+      // Use url as baseUrl
+      const {cssText, tasks} = await captureText(Object.assign({baseUrl: url, docUrl: docUrl}, {
+        text, storageInfo, clipId, config, requestParams, needFixStyle
+      }));
+
+      const assetName = Asset.getNameByLink({
+        link: url,
+        extension: 'css',
+        prefix: clipId
+      });
+      const filename = Asset.getFilename({storageInfo, assetName});
+
+      tasks.push(Task.createStyleTask(filename, cssText, clipId));
+      return tasks;
     }
-    T.each(rules, function(rule){
-      cssText = cssText.replace(rule.regExp, getReplace(rule));
+  } catch(err) {
+    // Fetching text is rejected
+    Log.error(`fetch.text request css (url:${url}) failed`, err.message);
+    // it's fine.
+    return [];
+  }
+}
+
+/**
+ * Capture CSS text
+ *
+ * @param {Object} opts
+ *   - {String} text
+ *   - {String} baseUrl
+ *              This is the baseUrl of asset url(they may be relative).
+ *              If text come from <style> tag or style attribute, then baseUrl is the web page's baseUrl
+ *              If text come from <link rel="stylesheet">, then baseUrl is the href attribute of <link> tag
+ *   - {String} docUrl
+ *              url of document
+ *   - {Object} storageInfo
+ *   - {String} clipId
+ *   - {Object} config
+ *   - {Object} requestParams
+ *   - {Boolean} needFixStyle
+ *
+ * @return {Array}
+ *   - {String} cssText
+ *   - {Array}  tasks
+ */
+async function captureText(params) {
+  const {baseUrl, docUrl, storageInfo, clipId, config, requestParams, needFixStyle} = params;
+  let {text: styleText} = params;
+  const taskCollection = [];
+
+  // FIXME danger here (order matter)
+
+  const ruleA = {
+    regExp: /url\("[^\)]+"\)/igm,
+    separator: '"',
+    baseUrl: baseUrl,
+    getReplacement: getReplacement_common,
+  };
+
+  const ruleB = {
+    regExp: /url\('[^\)]+'\)/igm,
+    separator: "'",
+    baseUrl: baseUrl,
+    getReplacement: getReplacement_common,
+  };
+
+  const ruleC = {
+    regExp: /url\([^\)'"]+\)/igm,
+    separator: /\(|\)/,
+    baseUrl: baseUrl,
+    getReplacement: getReplacement_common,
+  };
+
+  // rules for import styles
+  const rulexA = {
+    regExp: /@import\s+url\("[^\)]+"\)\s*([^;]*);$/igm,
+    separator: '"',
+    baseUrl: baseUrl,
+    getReplacement: getReplacement_style,
+  };
+  const rulexB = {
+    regExp: /@import\s+url\('[^\)]+'\)\s*([^;]*);$/igm,
+    separator: "'",
+    baseUrl: baseUrl,
+    getReplacement: getReplacement_style,
+  };
+  const rulexC = {
+    regExp: /@import\s+url\([^\)'"]+\)\s*([^;]*);$/igm,
+    separator: /\(|\)/,
+    baseUrl: baseUrl,
+    getReplacement: getReplacement_style,
+  };
+
+  const rulexD = {
+    regExp: /@import\s*'[^;']+'\s*([^;]*);$/igm,
+    separator: "'",
+    baseUrl: baseUrl,
+    getReplacement: getReplacement_style,
+  };
+  const rulexE = {
+    regExp: /@import\s*"[^;"]+"\s*([^;]*);$/igm,
+    separator: '"',
+    baseUrl: baseUrl,
+    getReplacement: getReplacement_style,
+  };
+
+  styleText = stripCssComments(styleText);
+
+  const commonParams = { baseUrl, docUrl, clipId, storageInfo, requestParams };
+
+  let parsedResult, result;
+
+  // fonts
+  const fontRegExp = /@font-face\s?\{[^\}]+\}/gm;
+  parsedResult = parseAsset({
+    styleText: styleText,
+    regExp: fontRegExp,
+    rules: [ruleA, ruleB, ruleC],
+    saveAsset: config.saveWebFont,
+  });
+  result = await generateTasks(Object.assign({
+    taskType: 'fontFileTask',
+  }, commonParams, parsedResult));
+  styleText = result.styleText;
+  taskCollection.push(...result.tasks);
+
+
+
+  // background
+  const bgRegExp = /background:([^:;]*url\([^\)]+\)[^:;]*)+;/img;
+  parsedResult = parseAsset({
+    styleText: styleText,
+    regExp: bgRegExp,
+    rules: [ruleA, ruleB, ruleC],
+    saveAsset: config.saveCssImage,
+  });
+  result = await generateTasks(Object.assign({
+    taskType: 'imageFileTask',
+  }, commonParams, parsedResult));
+  styleText = result.styleText;
+  taskCollection.push(...result.tasks);
+
+
+  // background-image
+  const bgImgRegExp = /background-image:([^:;]*url\([^\)]+\)[^:;]*)+;/img;
+  parsedResult = parseAsset({
+    styleText: styleText,
+    regExp: bgImgRegExp,
+    rules: [ruleA, ruleB, ruleC],
+    saveAsset: config.saveCssImage,
+  });
+  result = await generateTasks(Object.assign({
+    taskType: 'imageFileTask',
+  }, commonParams, parsedResult));
+  styleText = result.styleText;
+  taskCollection.push(...result.tasks);
+
+
+  // border-image
+  const borderImgExp = /border-image:([^:;]*url\([^\)]+\)[^:;]*)+;/img;
+  parsedResult = parseAsset({
+    styleText: styleText,
+    regExp: borderImgExp,
+    rules: [ruleA, ruleB, ruleC],
+    saveAsset: config.saveCssImage,
+  });
+  result = await generateTasks(Object.assign({
+    taskType: 'imageFileTask',
+  }, commonParams, parsedResult));
+  styleText = result.styleText;
+  taskCollection.push(...result.tasks);
+
+
+  // @import css
+  const cssRegExp = /@import[^;]+;/igm;
+  parsedResult = parseAsset({
+    styleText: styleText,
+    regExp: cssRegExp,
+    rules: [rulexA, rulexB, rulexC, rulexD, rulexE],
+    saveAsset: true
+  });
+  result = await generateTasks(Object.assign({
+    taskType: 'styleFileTask',
+    extension: 'css'
+  }, commonParams, parsedResult));
+  styleText = result.styleText;
+
+  // convert css url task to text task.
+  for(let i = 0; i < result.tasks.length; i++) {
+    const tasks = await captureLink(Object.assign({
+      link: result.tasks[i].url,
+      config: config,
+      needFixStyle: needFixStyle,
+    }, commonParams));
+    taskCollection.push(...tasks);
+  }
+
+  if (needFixStyle) {
+    styleText = fixBodyChildrenStyle(styleText);
+  }
+
+
+  return {cssText: styleText, tasks: taskCollection};
+}
+
+
+/**
+ * Parse style text according to regular expression of asset
+ *
+ * @param {Object} params:
+ *   - {String}  styleText
+ *   - {RegExp}  regExp
+ *   - {Array}   rules
+ *   - {Boolean} saveAsset
+ *
+ * @return {Object}
+ *   - {String} styleText
+ *   - {Marker} marker
+ */
+function parseAsset(params) {
+  const  {regExp, rules, saveAsset} = params;
+
+  let {styleText} = params;
+  let marker = T.createMarker();
+
+  styleText = styleText.replace(regExp, (match) => {
+    const r = parseTextUrl({
+      cssText: match,
+      rules: rules,
+      marker: marker,
+      saveAsset: saveAsset,
     });
-    return { cssText: cssText, tasks: tasks };
-  }
+    marker = r.marker;
+    return r.cssText;
+  });
 
-  function fixBodyChildrenStyle(css) {
-    // We wrap captured html in a div (with class mx-wc-main),
-    // So we should fix this.
-    const cssBodyExp = /(^|[\{\}\s,;]{1})(body\s*>\s?)/igm;
-    return css.replace(cssBodyExp, function(match, p1, p2){
-      return match.replace(p2, "body > .mx-wc-main > ");
+  return {styleText: styleText, marker: marker};
+}
+
+
+/**
+ * Parse style text according to rules, mark all target urls and collect them.
+ *
+ * @param {Object} params
+ *   - {String}   cssText
+ *   - {Array}    rules
+ *   - {Marker}   marker
+ *   - {Boolean}  svaeAsset
+ *
+ * @return {Object}
+ *   - {String} cssText
+ *   - {Marker} marker
+ */
+function parseTextUrl(params) {
+
+  const {rules, marker, saveAsset} = params;
+  let cssText = params.cssText;
+
+  T.each(rules, function(rule){
+    const replacement = rule.getReplacement(marker, saveAsset);
+    cssText = cssText.replace(rule.regExp, replacement);
+  });
+  return { cssText: cssText, marker: marker};
+}
+
+
+/**
+ * create a replacement function. It'll be Used on web fonts, css images.
+ *
+ * @param {Marker} marker
+ *                 Used to collect url and replace it with a marker.
+ * @param {Boolean} saveAsset
+ *                  Whether to save asset or not.
+ * @return {Function}
+ */
+function getReplacement_common(marker, saveAsset) {
+  const {separator, baseUrl} = this;
+
+  return function(match) {
+    const path = match.split(separator)[1].trim();
+    const {isValid, url, message} = T.completeUrl(path, baseUrl);
+    if (!isValid) {
+      const err = [message, `path: ${path}`].join(' ');
+      //TODO add error message
+      return 'url("")';
+    }
+    if(T.isDataUrl(url) || T.isHttpUrl(url)) {
+      if(saveAsset){
+        marker.values.push(url);
+        return `url("${marker.next()}")`;
+      } else {
+        // set variable to blank
+        return 'url("")';
+      }
+    } else {
+      return match;
+    }
+  }
+}
+
+
+/**
+ * create a replacement function. It'll be used on style import (@import url();)
+ *
+ * @param {Marker} marker
+ *                 Used to collect url and replace it with a marker.
+ * @param {Boolean} saveAsset
+ *                  Whether to save asset or not. In this function it's always true.
+ * @return {Function}
+ */
+function getReplacement_style(marker, saveAsset) {
+  const {separator, baseUrl} = this;
+
+  return function(match, p1) {
+    const path = match.split(separator)[1].trim();
+    const {isValid, url, message} = T.completeUrl(path, baseUrl);
+    if (!isValid) {
+      const err = [message, `path: ${path}`].join(' ');
+      return `/*error: ${err}*/`;
+    }
+    if(T.isDataUrl(url) || T.isHttpUrl(url)) {
+      marker.values.push(url);
+      if (p1.trim() === "") {
+        return `@import url("${marker.next()}");`;
+      } else {
+        return `@import url("${marker.next()}") ${p1.trim()};`;
+      }
+    } else {
+      return match;
+    }
+  }
+}
+
+
+/**
+ * Generate Task according to asset url, and replace marker back to asset path.
+ *
+ * @param {Object} params
+ *   - {String} styleText
+ *   - {Marker} marker
+ *   - {String} baseUrl
+ *   - {String} docUrl
+ *   - {String} clipId
+ *   - {Object} storageInfo
+ *   - {Object} requestParams
+ *   - {String} extension
+ *   - {String} taskType
+ *
+ * @return {Object{
+ *   - {String} styleText
+ *   - {Array} tasks
+ */
+async function generateTasks(params) {
+  const {baseUrl, docUrl, clipId, storageInfo,
+    requestParams, extension, taskType} = params;
+  let styleText = params.styleText;
+
+  const tasks = [];
+  const assetPaths = [];
+  const urls = params.marker.values;
+  for (let i = 0; i < urls.length; i++) {
+    const url = urls[i];
+    const httpMimeType = await Asset.getHttpMimeType(requestParams.toParams(url));
+    const assetName = Asset.getNameByLink({
+      link: url,
+      extension: extension,
+      prefix: clipId,
+      mimeTypeData: {httpMimeType}
     });
+    const filename = Asset.getFilename({storageInfo, assetName});
+    tasks.push(Task.createUrlTask(filename, url, clipId, taskType));
+    if(baseUrl === docUrl){
+      assetPaths.push(Asset.getPath({storageInfo, assetName}));
+    }else{
+      assetPaths.push(assetName);
+    }
   }
 
+  styleText = params.marker.replaceBack(styleText, assetPaths)
+  return {styleText: styleText, tasks}
+}
 
-  return {
-    captureText: captureText,
-    captureLink: captureLink
-  }
-});
+
+/**
+ * We wrap captured html in a div (with class mx-wc-main),
+ * So we should fix this.
+ */
+function fixBodyChildrenStyle(css) {
+  const cssBodyExp = /(^|[\{\}\s,;]{1})(body\s*>\s?)/igm;
+  return css.replace(cssBodyExp, function(match, p1, p2){
+    return match.replace(p2, "body > .mx-wc-main > ");
+  });
+}
+
+export default {captureText, captureLink};

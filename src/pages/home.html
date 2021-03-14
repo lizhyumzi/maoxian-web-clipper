@@ -4,23 +4,23 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Home Page - MaoXian</title>
-    <link rel="stylesheet" type="text/css" href="_base.css" />
-    <link rel="stylesheet" type="text/css" href="home.css" />
+    <link href="_base.css" rel="stylesheet"/>
+    <link href="home.css" rel="stylesheet"/>
   </head>
   <body>
 
     <div class="main">
       <h1 class="green">MaoXian Web Clipper</h1>
       <div>
-        <label i18n="home.label.version"></label>:
+        <label i18n="version"></label>:
         <label class="version"></label>
       </div>
       <div class="nav" id="extension-pages">
-        <h2 i18n="home.nav.extension-pages"></h2>
+        <h2 i18n="nav.extension-pages"></h2>
         <div class="links"></div>
       </div>
       <div class="nav" id="remote-pages">
-        <h2 i18n="home.nav.remote-pages"></h2>
+        <h2 i18n="nav.remote-pages"></h2>
         <div class="links"></div>
       </div>
     </div>
@@ -33,19 +33,13 @@
       </div>
     </template>
 
-    <script type="text/javascript" src="../vendor/js/browser-polyfill.js"></script>
-    <script type="text/javascript" src="../vendor/js/i18n.js"></script>
-    <script type="text/javascript" src="../_locales/en.js"></script>
-    <script type="text/javascript" src="../_locales/zh-CN.js"></script>
-    <script type="text/javascript" src="../js/env.js"></script>
-    <script type="text/javascript" src="../js/lib/tool.js"></script>
-    <script type="text/javascript" src="../js/lib/log.js"></script>
-    <script type="text/javascript" src="../js/lib/ext-api.js"></script>
-    <script type="text/javascript" src="../js/lib/ext-msg.js"></script>
-    <script type="text/javascript" src="../js/lib/translation.js"></script>
-    <script type="text/javascript" src="../js/lib/storage.js"></script>
-    <script type="text/javascript" src="../js/lib/config.js"></script>
-    <script type="text/javascript" src="../js/lib/link.js"></script>
-    <script type="text/javascript" src="home.js"></script>
+    <!-- scripts -->
+    <script src="../vendor/js/browser-polyfill.js"></script>
+    <script src="../vendor/js/i18n.js"></script>
+    <script src="../_locales/en/common.js"></script>
+    <script src="../_locales/en/home.js"></script>
+    <script src="../_locales/zh_CN/common.js"></script>
+    <script src="../_locales/zh_CN/home.js"></script>
+    <script src="home.js" type="module"></script>
   </body>
 </html>

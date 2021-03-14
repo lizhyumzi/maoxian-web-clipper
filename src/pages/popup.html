@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>popup</title>
-    <link rel="stylesheet" type="text/css" href="popup.css" />
+    <link href="popup.css" rel="stylesheet"/>
   </head>
   <body>
     <div class="main">
@@ -22,19 +22,14 @@
         </div><div class="content">${menuContent} </div>
       </a>
     </template>
-    <script type="text/javascript" src="../vendor/js/browser-polyfill.js"></script>
-    <script type="text/javascript" src="../vendor/js/i18n.js"></script>
-    <script type="text/javascript" src="../_locales/en.js"></script>
-    <script type="text/javascript" src="../_locales/zh-CN.js"></script>
-    <script type="text/javascript" src="../js/env.js"></script>
-    <script type="text/javascript" src="../js/lib/tool.js"></script>
-    <script type="text/javascript" src="../js/lib/ext-api.js"></script>
-    <script type="text/javascript" src="../js/lib/ext-msg.js"></script>
-    <script type="text/javascript" src="../js/lib/translation.js"></script>
-    <script type="text/javascript" src="../js/lib/icon.js"></script>
-    <script type="text/javascript" src="../js/lib/link.js"></script>
-    <script type="text/javascript" src="../js/lib/storage.js"></script>
-    <script type="text/javascript" src="../js/lib/config.js"></script>
-    <script type="text/javascript" src="popup.js"></script>
+
+    <!-- scripts -->
+    <script src="../vendor/js/browser-polyfill.js"></script>
+    <script src="../vendor/js/i18n.js"></script>
+    <script src="../_locales/en/common.js"></script>
+    <script src="../_locales/en/popup.js"></script>
+    <script src="../_locales/zh_CN/common.js"></script>
+    <script src="../_locales/zh_CN/popup.js"></script>
+    <script src="popup.js" type="module"></script>
   </body>
 </html>

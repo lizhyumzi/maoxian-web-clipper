@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 
 
+require_relative 'lib/app_env'
 require_relative 'lib/log'
 require_relative 'lib/config'
 require_relative 'lib/application'
@@ -9,10 +10,15 @@ def run
   begin
     config = Config.load('./config.yaml')
     # init logger
-    log_level = ({
-      'development' => Logger::DEBUG,
-      'production'  => Logger::INFO
-    })[config.environment]
+    log_level = nil
+    case config.environment
+    when 'production'
+      log_level = Logger::INFO
+    when 'development'
+      log_level = Logger::DEBUG
+    else
+      log_level = Logger::DEBUG
+    end
 
     Log.init(log_level)
     at_exit { Log.info("App exit: #{Process.pid}") }
@@ -32,7 +38,15 @@ def run
       exit 1
     end
     Log.info("App Start")
-    Log.info("Version: #{Application::VERSION}")
+    Log.info("Version: #{AppEnv::APP_VERSION}")
+    Log.info("Ruby Version: #{AppEnv::RUBY_VERSION}")
+    Log.info("Msg handler: #{config.msg_handler}")
+    Log.info("Encoding: ")
+    Log.info("  Script => #{__ENCODING__}")
+    Log.info("  Locale => #{Encoding.find('locale')}")
+    Log.info("  Filesystem => #{Encoding.find('filesystem')}")
+    Log.info("  Default external => #{Encoding.default_external}")
+    Log.info("  Default internal => #{Encoding.default_internal || 'nil'}")
     Log.debug("pid: #{Process.pid}")
     Log.debug("args: #{ARGV}")
 

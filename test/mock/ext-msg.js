@@ -2,9 +2,19 @@
 ;(function() {
   let handlers = {};
   let state = {};
-  function sendToBackground(msg) {
+
+  function initBrowser(browser) {
+    if (!state.browser) { state.browser = browser; }
+    state.browser.runtime.sendMessage.callsFake(sendMessage);
+  }
+
+  function sendMessage(msg) {
     const handler = handlers[msg.type];
-    return handler(msg, state);
+    if (handler) {
+      return handler(msg, state);
+    } else {
+      throw "Unknow message type: " + msg.type;
+    }
   }
 
   // handler should return a Promise
@@ -63,6 +73,16 @@
     });
   }
 
+  function mockMsgResult(type, result, isResolved = true) {
+    mock(type, (msg, state) => {
+      if (isResolved) {
+        return Promise.resolve(result);
+      } else {
+        return Promise.reject(result);
+      }
+    });
+  }
+
 
   function clearMocks() {
     handlers = {};
@@ -70,9 +90,9 @@
   }
 
   module.exports = {
-    sendToBackground,
-    mock,
+    initBrowser,
     clearMocks,
+    mockMsgResult,
     mockFetchTextStatic,
     mockFetchTextUrls,
     mockFrameToHtmlStatic,

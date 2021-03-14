@@ -1,45 +1,40 @@
-;(function (root, factory) {
-  if (typeof module === 'object' && module.exports) {
-    // CJS
-    const process = require('process');
-    if (process.env.MX_WC_TESTING) {
-      module.exports = factory;
-    } else {
-      module.exports = factory(
-        require('./css.js')
-      );
-    }
+"use strict";
+
+import CapturerCss from './css.js';
+
+/*!
+ * Capture Element <style>
+ */
+
+/**
+ * @param {Object} opts
+ *   - {String} baseUrl
+ *   - {String} docUrl
+ *   - {Object} storageInfo
+ *   - {String} clipId
+ *   - {Object} cssRulesDict
+ *   - {Object} config
+ *   - {Object} requestParams
+ *   - {Boolean} needFixStyle
+ *
+ */
+async function capture(node, opts) {
+  node.removeAttribute('nonce');
+  let text = '';
+  if (node.getAttribute('data-mx-marker') === 'css-rules') {
+    const cssRules = opts.cssRulesDict[node.getAttribute('data-mx-id')];
+    const cssText = [].map.call(cssRules, (it) => {
+      return it.cssText
+    }).join("\n");
+    text = `\n${cssText}\n`;
+    node.removeAttribute('data-mx-marker');
+    node.removeAttribute('data-mx-id');
   } else {
-    // browser or other
-    root.MxWcCapturerStyle = factory(
-      root.MxWcCapturerCss,
-    );
+    text = node.textContent;
   }
-})(this, function(CapturerCss, undefined) {
-  "use strict";
+  const {cssText, tasks} = await CapturerCss.captureText(Object.assign({ text: text }, opts));
+  node.textContent = cssText;
+  return {node, tasks};
+}
 
-  /*!
-   * Capture Element <style>
-   */
-
-  /**
-   * @param {Object} opts
-   *   - {String} baseUrl
-   *   - {String} docUrl
-   *   - {Object} storageInfo
-   *   - {String} clipId
-   *   - {Object} mimeTypeDict
-   *   - {Object} config
-   *
-   */
-  async function capture(node, opts) {
-    node.removeAttribute('nonce');
-    const text = node.textContent;
-    const {cssText, tasks} = await CapturerCss.captureText(Object.assign({ text: text }, opts));
-    node.textContent = cssText;
-    return {node, tasks};
-  }
-
-
-  return {capture: capture}
-});
+export default {capture};

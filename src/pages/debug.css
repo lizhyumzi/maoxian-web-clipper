@@ -1,0 +1,38 @@
+
+.main {
+  max-width: 1240px;
+  min-height: 800px;
+  margin: 0 auto;
+  padding: 50px 20px 200px 20px;
+  /*
+  border: 1px solid #ccc;*/
+  background-color: black;
+  color: #aaa;
+}
+
+a { color: #3af555;  }
+
+section {
+  padding: 20px;
+  border: 1px solid #869c64;
+  margin-bottom: 40px;
+}
+
+details > summary {
+  cursor: pointer;
+}
+
+.num {
+  color: #3af555;
+}
+
+pre {
+  width: 100%;
+  overflow-x: auto;
+}
+
+pre > code {
+  background-color: black;
+  border: 0px;
+  line-height: 18px;
+}

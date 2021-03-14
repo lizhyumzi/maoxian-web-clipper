@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Debugging</title>
+    <link href="_base.css" rel="stylesheet"/>
+    <link href="debug.css" rel="stylesheet"/>
+  </head>
+  <body>
+
+    <div class="main">
+      <section class="links">
+        <a href="go.page:extPage.background?debug=1" target="_blank">Open Background Page</a>
+      </section>
+      <section class="storage">
+        <h2>Storage</h2>
+        <div class="content">
+          <div class="usedBytes"></div>
+          <details class="config">
+            <summary> Configuration </summary>
+            <pre><code></code></pre>
+          </details>
+          <details class="assistant">
+            <summary> Assistant </summary>
+            <pre><code></code></pre>
+          </details>
+          <details class="selection">
+            <summary> Selection </summary>
+            <pre><code></code></pre>
+          </details>
+          <details class="misc">
+            <summary> Misc </summary>
+            <pre><code></code></pre>
+          </details>
+          <details class="categories">
+            <summary> categories (<strong class="num"></strong>) </summary>
+            <pre><code></code></pre>
+          </details>
+          <details class="tags">
+            <summary> tags (<strong class="num"></strong>) </summary>
+            <pre><code></code></pre>
+          </details>
+          <details class="clippings">
+            <summary> clippings (<strong class="num"></strong>)
+              <span class="usedBytes"></span>
+            </summary>
+            <pre><code></code></pre>
+          </details>
+          <details class="failed-tasks">
+            <summary> failed tasks (<strong class="num"></strong>)
+            </summary>
+            <pre><code></code></pre>
+          </details>
+        </div>
+      </section>
+
+      <section class="asset-cache">
+        <h2>Asset Cache</h2>
+        <div>
+          <button id="clear-asset-cache">clear</button>
+        </div>
+        <br />
+        <div >There are <strong class="num"></strong> records</div>
+        <div class="content">
+          <details class="cache-details">
+            <summary> Details </summary>
+            <div class=""></div>
+          </details>
+        </div>
+      </section>
+    </div>
+
+    <template id="asset-cache-tpl">
+      <div>
+        <div>${link}</div>
+        <div>
+          <details>
+            <summary title="click me to show response headers"> Response Headers </summary>
+            <div>${headersHtml}</div>
+          </details>
+        </div>
+        <div>Size: ${byteSize} Bytes</div>
+      </div>
+    </template>
+
+    <!-- scripts -->
+    <script src="../vendor/js/browser-polyfill.js"></script>
+    <script src="debug.js" type="module"></script>
+  </body>
+</html>
